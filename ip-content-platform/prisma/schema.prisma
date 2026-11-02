@@ -1,0 +1,119 @@
+// Prisma schema for IP Content Platform
+// 生产环境使用 Vercel Postgres，本地开发可连接 Vercel Postgres 或本地 PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 内容系列 - 如"好物分享"、"通勤记录"
+model Series {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  styleAnalysis String? // AI分析的写作风格
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  referenceCopies ReferenceCopy[]
+  generatedContents GeneratedContent[]
+}
+
+// 参考文案 - 用于分析系列写作风格
+model ReferenceCopy {
+  id        String   @id @default(cuid())
+  seriesId  String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+}
+
+// AI生成的内容底稿
+model GeneratedContent {
+  id            String   @id @default(cuid())
+  seriesId      String?  // 单篇内容时为 null
+  topic         String
+  titles        String   // JSON string array of 3 titles
+  content       String   // 完整正文
+  coverDescription String // 封面图设计描述
+  tags          String   // JSON string array of 10-15 tags
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  publishDate   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  series Series? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  trafficData TrafficData?
+  derivedTopics DerivedTopic[]
+}
+
+// 流量数据 — 对齐小红书笔记列表明细表
+model TrafficData {
+  id            String   @id @default(cuid())
+  contentId     String   @unique
+
+  // 小红书核心指标
+  contentType   String?  // 体裁: 图文/视频
+  views         Int      @default(0) // 观看量
+  impressions   Int      @default(0) // 曝光量
+  clickRate     Float    @default(0) // 封面点击率
+  likes         Int      @default(0) // 点赞数
+  comments      Int      @default(0) // 评论数
+  favorites     Int      @default(0) // 收藏数
+  newFollowers  Int      @default(0) // 涨粉数
+  shares        Int      @default(0) // 分享数
+  avgWatchTime  Int      @default(0) // 人均观看时长(秒)
+  danmaku       Int      @default(0) // 弹幕数
+
+  recordDate    DateTime @default(now())
+  analysis      String?  // AI分析的运营建议
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  content GeneratedContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+// 追热点衍生选题
+model DerivedTopic {
+  id          String   @id @default(cuid())
+  contentId   String
+  title       String
+  description String?
+  hotPoint    String?  // 相关热点
+  createdAt   DateTime @default(now())
+
+  content GeneratedContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+// 账号诊断报告 — 全量分析
+model AccountDiagnosis {
+  id            String   @id @default(cuid())
+  period        String   // 统计周期, 如 "2026-08-24至2026-08-30"
+  
+  // 账号级别汇总数据
+  totalViews    Int      @default(0) // 总观看数
+  totalInteractions Int  @default(0) // 总互动数 (点赞+评论+收藏+分享)
+  totalNewFollowers Int  @default(0) // 总涨粉数
+  totalProfileVisits Int @default(0) // 主页访客数
+  totalPosts    Int      @default(0) // 发布数
+  totalImpressions Int   @default(0) // 总曝光量
+  
+  // 流量来源分布
+  trafficSources String  // JSON: {视频推荐, 首页推荐, 搜索, 个人主页, 关注页面, 其他}
+  
+  // AI分析结果
+  diagnosis     String?  // 整体诊断分析
+  contentPlan   String?  // 内容规划建议
+  topicSuggestions String? // 选题创新建议 JSON array
+  improvements  String?  // 改进建议
+  
+  createdAt     DateTime @default(now())
+}
